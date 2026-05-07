@@ -255,7 +255,7 @@ function AdvancedChatbot() {
     `;
 
     try {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest", systemInstruction: SYSTEM_PROMPT });
+      const model = genAI.getGenerativeModel({ model: "gemini-3-flash", systemInstruction: SYSTEM_PROMPT });
       
       // Kullanicinin 5 soruluk gecmisini context olark gemini'ye yolluyoruz (Token harcamasini dengele).
       const chatContext = newMessagesHistory.slice(-5).map(m => m.role === 'user' ? `User: ${m.content}` : `Nova: ${m.content}`).join("\n");
