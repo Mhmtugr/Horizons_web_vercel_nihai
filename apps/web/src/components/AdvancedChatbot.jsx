@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, X, CheckCircle2, History, Trash2, Send, User, MessageSquare, FileText, Loader2, Calendar, ArrowLeft, Phone, Bot, Sparkles } from 'lucide-react';
 import CalendlyWidget from './CalendlyWidget.jsx';
 // --- BIZIM SIFIR HATA GEMINI ENTEGRASYONU (ESKİ USEINTEGRATEDAİ ÇÖPÜ KALDIRILDI) ---
-import { GoogleGenerativeAI } from "@google/generativeai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 // STATİK BUTONLAR - Başlangıçta görünür
 const INITIAL_QUESTIONS =[
