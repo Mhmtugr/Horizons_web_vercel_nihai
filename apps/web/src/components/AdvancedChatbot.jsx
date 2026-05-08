@@ -14,8 +14,9 @@ const INITIAL_QUESTIONS =[
   'Nasıl başlayabilirim?'
 ];
 
-// --- GUVENLIK KONTROLU VE SIZIN TALEP ETTIĞİNİZ GEN 3 MODELLERİ ---
-const GEMINI_API_KEY = "AIzaSyC5FtSklR0kn6h_9A5Slbb148zvihlnz1w"; 
+// --- KURUMSAL GUVENLIK (VITE ENV IMPORT) VE GEN 3 MODELLERI ---
+// Şifreyi açıkça yazmıyoruz, Vercel sunucusundan güvenlikli olarak (import.meta.env) çekiyoruz!
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || ""; 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 const PRIMARY_MODEL = "gemini-3.1-pro";
