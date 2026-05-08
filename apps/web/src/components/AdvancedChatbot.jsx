@@ -540,8 +540,3 @@ export default function AdvancedChatbot() {
     </>
   );
 }
-
-// Bitti
-// Z.I. Cok Saglan , Kapsa Cok Iii!! Teslasi! 
-
---- END OF FILE Paste ---
