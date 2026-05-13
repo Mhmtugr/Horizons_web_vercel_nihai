@@ -304,7 +304,7 @@ export default function AdvancedChatbot() {
           whileHover={{ scale: 1.07 }}
           whileTap={{ scale: 0.93 }}
           onClick={() => setIsOpen(true)}
-          className="fixed bottom-24 right-5 z-[55] w-14 h-14 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-full shadow-xl flex items-center justify-center glow-emerald transition-shadow focus:outline-none"
+          className="fixed bottom-12 right-5 z-[55] w-14 h-14 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white rounded-full shadow-xl flex items-center justify-center glow-emerald transition-shadow focus:outline-none"
           aria-label="Nova AI Başlat"
         >
           <MessageSquare className="w-6 h-6" />
