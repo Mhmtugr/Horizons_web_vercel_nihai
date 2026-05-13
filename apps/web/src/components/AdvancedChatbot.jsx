@@ -272,7 +272,7 @@ export default function AdvancedChatbot() {
 
   const handleQuickReplyClick = (buttonText) => {
     if (buttonText.toLowerCase().includes('toplantı') || buttonText.toLowerCase().includes('randevu') || buttonText.toLowerCase().includes('planla')) {
-      setShowCalendly(true);
+      window.dispatchEvent(new Event('open-calendar-modal'));
       return;
     }
     if (buttonText.toLowerCase().includes('gerçek kişi') || buttonText.toLowerCase().includes('canlı') || buttonText.toLowerCase().includes('operatör')) {
