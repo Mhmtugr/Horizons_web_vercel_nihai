@@ -7,6 +7,7 @@ import CalendlyWidget from './CalendlyWidget.jsx';
 // 🚀 ZERO-API-KEY AI ENGINE (POLLINATIONS)
 // ============================================
 
+// 🎯 SENİN ORİJİNAL PREMIUM SORULARIN (BİREBİR KORUNDUM)
 const INITIAL_QUESTIONS = [
   'Hizmetleriniz hakkında bilgi alabilir miyim?',
   'Toplantı planla',
@@ -24,11 +25,10 @@ const COMPANY_REAL_DATA = {
   whatsappLink: "https://wa.me/905468667215",
   website: "https://novaotomasyon.com",
   address: "İstanbul, Türkiye",
-  // AI bu bilgiler DIŞINDA hiçbir iletişim bilgisi üretemez
 };
 
 // ============================================
-// 🤖 AI PROVIDER'LARI (SIRAYLA DENENECEK)
+// 🤖 AI PROVIDER'LARI (ÖNCELİK SIRASI)
 // ============================================
 const PROVIDERS = [
   { name: "OpenAI GPT", model: "openai", priority: 1 },
@@ -49,7 +49,7 @@ const callPollinations = async (model, messages, systemPrompt) => {
         { role: "system", content: systemPrompt },
         ...messages
       ],
-      temperature: 0.4, // Düşük temperature = daha az yalan
+      temperature: 0.3, // Çok düşük = minimum hallucination
       seed: Math.floor(Math.random() * 1000000)
     }),
   });
@@ -89,31 +89,28 @@ const callAIWithFallback = async (messages, systemPrompt) => {
 };
 
 // ============================================
-// 🛡️ GÜVENLİK KATMANI: YALAN FİLTRESİ
+// 🛡️ GÜVENLİK KATMANI: HALLUCINATION FİLTRESİ
 // ============================================
 const sanitizeAIResponse = (text) => {
   if (!text) return text;
   
-  // Olası uydurma email/telefon kalıplarını tespit et (gerçek olanlar hariç)
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
   const foundEmails = text.match(emailRegex) || [];
   
   for (const email of foundEmails) {
     if (email.toLowerCase() !== COMPANY_REAL_DATA.email.toLowerCase()) {
-      // Uydurma email bulundu, yanıtı reddet
-      console.warn(`🛡️ HALLUCINATION TESPİT: Uydurma email bulundu: ${email}`);
-      return null; // null = geçersiz yanıt
+      console.warn(`🛡️ HALLUCINATION TESPİT: Uydurma email: ${email}`);
+      return null;
     }
   }
   
-  // Telefon numarası kontrolü (Türkiye formatı)
   const phoneRegex = /(\+?90)?[\s-]?\(?0?5\d{2}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/g;
   const foundPhones = text.match(phoneRegex) || [];
   
   for (const phone of foundPhones) {
     const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
     if (!cleanPhone.includes('905468667215') && !cleanPhone.includes('5468667215')) {
-      console.warn(`🛡️ HALLUCINATION TESPİT: Uydurma telefon bulundu: ${phone}`);
+      console.warn(`🛡️ HALLUCINATION TESPİT: Uydurma telefon: ${phone}`);
       return null;
     }
   }
@@ -125,8 +122,13 @@ export default function AdvancedChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   
+  // 🎯 PREMIUM WELCOME MESAJI
   const [localMessages, setLocalMessages] = useState([
-     { role: 'assistant', content: 'Merhaba! Ben Nova Teknoloji Otonom Satış Danışmanı. İş süreçlerinizi yapay zeka ile nasıl büyütebileceğimizi konuşalım mı?', created: new Date().toISOString() }
+     { 
+       role: 'assistant', 
+       content: 'Merhaba! Ben Nova, Nova Teknoloji\'nin otonom satış danışmanıyım. Üretim süreçlerinizi yapay zeka ile nasıl dönüştürebileceğimizi konuşmak ister misiniz?', 
+       created: new Date().toISOString() 
+     }
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorState, setErrorState] = useState(null);
@@ -287,52 +289,66 @@ export default function AdvancedChatbot() {
   };
 
   // ============================================
-  // 🛡️ SERTLEŞTİRİLMİŞ SYSTEM PROMPT (CEO SEVİYESİ)
+  // 🎯 APPLE SEVİYESİ SYSTEM PROMPT
   // ============================================
   const SYSTEM_PROMPT = `Sen Nova'sın. Nova Teknoloji'nin Kıdemli İş Geliştirme Asistanısın.
-Tonun: Tesla/Apple seviyesinde prestijli, kısa, net, sonuç odaklı. Asla robotik olma.
+
+# 🎭 KARAKTERİN
+- Ton: Tesla/Apple seviyesinde prestijli, kısa, net, sonuç odaklı
+- Asla robotik veya aşırı resmi olma
+- Her cevap MAX 3-4 cümle olmalı
+- Lafı uzatma, direkt sonuca git
+- Müşteriye her zaman "15 dakikalık ücretsiz demo" teklif et
 
 # 🚨 KRİTİK KURAL 1: ASLA BİLGİ UYDURMA
-- Sadece aşağıda verilen GERÇEK bilgiler DIŞINDA hiçbir bilgi VERME.
-- Bilmediğin bir şey sorulursa KESİNLİKLE şunu söyle: "Bu konuda net bilgi vermek istemem, sizi uzman ekibimize yönlendireyim."
-- HİÇBİR ZAMAN uydurma email adresi, telefon numarası, adres, fiyat, çalışan ismi ÜRETME.
-- "İletişim", "mail", "telefon", "adres" gibi sorularda SADECE aşağıdaki bilgileri kullan:
+- Sadece aşağıdaki GERÇEK bilgiler DIŞINDA hiçbir şey VERME
+- Bilmediğin bir şey sorulursa: "Bu konuda sizi uzman ekibimize yönlendireyim." de
+- HİÇBİR ZAMAN uydurma email, telefon, adres, fiyat, çalışan ismi ÜRETME
 
+Gerçek İletişim Bilgileri:
 📧 E-POSTA: ${COMPANY_REAL_DATA.email}
 📱 WHATSAPP: ${COMPANY_REAL_DATA.whatsapp}
 🌐 WEB: ${COMPANY_REAL_DATA.website}
 📍 KONUM: ${COMPANY_REAL_DATA.address}
 
-# 🚨 KRİTİK KURAL 2: HİZMET BİLGİSİ (SABİT LİSTE)
-Sadece şu hizmetleri veriyorsun:
+# 🎯 HİZMETLER (SABİT LİSTE - DIŞINDA BİR ŞEY SÖYLEME)
 1. Otonom Üretim & Fabrika Zekası
 2. RPA (Robotik Süreç Otomasyonu)
 3. B2B Küresel Müşteri Radarı
 4. Küresel İhale Takibi
 5. Kapsamlı Büyüme Stratejisi
 6. AI Destekli CEO Yardımcısı (Satıştan Sevkiyata takip)
-7. Enerji Dönüşümü & Verimlilik (Elektrik Mühendisliği)
+7. Enerji Dönüşümü & Verimlilik
 
 Bu liste DIŞINDA bir hizmet sorulursa: "Bu hizmet şu an portföyümüzde yok, ancak uzman ekibimiz sizinle görüşüp değerlendirebilir." de.
 
 # 💰 FİYAT POLİTİKASI
 - Kurulum: 1.000€ - 10.000€ (sadece çok ısrar edilirse söyle)
 - Aylık Paketler: 100€ - 3.000€
-- Her zaman "15 dakikalık ücretsiz demo" teklif et.
+- Her zaman "15 dakikalık ücretsiz demo" teklif et
+- "Kişiden kişiye değişir" DEME, net fiyat bantları ver
 
 # 🎯 DİNAMİK BUTON KURALLARI (ÇOK ÖNEMLİ)
 Cevabının TAM SONUNDA sadece şu formatta JSON döndür:
 {"quickReplies":["Buton1","Buton2","Buton3"]}
 
-İZİNLİ BUTONLAR (sadece bunları kullan, başkasını UYDURMA):
-- "Toplantı planla" (toplantı/randevu isteyenlere ZORUNLU ekle)
+İZİNLİ BUTONLAR (sadece bunları kullan):
+- "Toplantı planla" (toplantı/randevu isteyenlere ZORUNLU)
 - "Gerçek kişi ile görüş" (şikayet/karmaşık konularda)
 - "Fiyat bilgisi" (fiyat sorulduğunda)
 - "Demo talep et" (ilgi gösterenlere)
 - "Hizmetleri anlat" (genel sorularda)
+- "Referanslar" (güven isteyenlere)
+- "Nasıl başlayabilirim?" (başlangıç soranlara)
 - "Başka sorum var" (devam etmek isteyenlere)
 
-Her buton MAX 3 kelime. Her cevapda max 3 buton.
+Her buton MAX 3 kelime. Her cevapda max 3 buton. Bağlama en uygun 3 butonu seç.
+
+ÖRNEK SENARYOL:
+- "Hizmetleriniz hakkında bilgi" → {"quickReplies":["Hizmetleri anlat","Demo talep et","Toplantı planla"]}
+- "Fiyatlandırmanız nasıl?" → {"quickReplies":["Fiyat bilgisi","Demo talep et","Toplantı planla"]}
+- "Toplantı ayarlayalım" → {"quickReplies":["Toplantı planla","Gerçek kişi ile görüş"]}
+- "Nasıl başlayabilirim?" → {"quickReplies":["Demo talep et","Toplantı planla","Hizmetleri anlat"]}
 
 # 📅 TOPLANTI TALEBİ
 Müşteri "randevu", "görüşelim", "toplantı" derse:
@@ -340,14 +356,14 @@ Müşteri "randevu", "görüşelim", "toplantı" derse:
 + quickReplies'e ZORUNLU "Toplantı planla" ekle.
 
 # ❌ YASAKLI DAVRANIŞLAR
-- "İletişim için: info@falan.com" gibi UYDURMA email yazma
-- "+90 5XX XXX XX XX" gibi UYDURMA telefon yazma
-- "Şu adreste bulunuyoruz: ..." gibi UYDURMA adres yazma
+- Uydurma email/telefon/adres yazma
 - Olmayan hizmet isimleri uydurma
-- "Kişiden kişiye değişir" DE (net fiyat bantları ver)
+- "Kişiden kişiye değişir" DE
+- Uzun paragraflar yazma (MAX 3-4 cümle)
+- İngilizce terimler kullanma
 
 # 🇹🇷 DİL
-Her zaman TÜRKÇE cevap ver. İngilizce terim kullanma.`;
+Her zaman TÜRKÇE cevap ver.`;
 
   const handleSendMessage = async (textToProcess) => {
     const text = typeof textToProcess === 'string' ? textToProcess : inputValue;
@@ -372,15 +388,13 @@ Her zaman TÜRKÇE cevap ver. İngilizce terim kullanma.`;
       const result = await callAIWithFallback(messages, SYSTEM_PROMPT);
 
       if (result.success) {
-        // 🛡️ HALLUCINATION FİLTRESİ UYGULA
         const sanitized = sanitizeAIResponse(result.content);
         
         if (sanitized === null) {
-          // Uydurma bilgi tespit edildi, güvenli fallback yanıt
           console.warn("🛡️ Yanıt hallucination filtresine takıldı, güvenli yanıt kullanılıyor.");
           setLocalMessages([...newMessagesHistory, { 
             role: 'assistant', 
-            content: `Size en doğru bilgiyi sunabilmem için uzman ekibimize yönlendirmek istiyorum. Doğrudan iletişim kanallarımız:\n\n📧 ${COMPANY_REAL_DATA.email}\n📱 ${COMPANY_REAL_DATA.whatsapp}\n\n{"quickReplies":["Gerçek kişi ile görüş","Toplantı planla","Demo talep et"]}`,
+            content: `Size en doğru bilgiyi sunabilmem için uzman ekibimize yönlendirmek istiyorum.\n\n📧 ${COMPANY_REAL_DATA.email}\n📱 ${COMPANY_REAL_DATA.whatsapp}\n\n{"quickReplies":["Gerçek kişi ile görüş","Toplantı planla","Demo talep et"]}`,
             created: new Date().toISOString() 
           }]);
         } else {
@@ -410,18 +424,18 @@ Her zaman TÜRKÇE cevap ver. İngilizce terim kullanma.`;
   const extractQuickReplies = (text) => {
     if (!text) return [];
     
-    // İZİNLİ BUTON WHITELIST
+    // 🎯 PREMIUM WHITELIST (SENİN ORİJİNAL SORULARIN DAHİL)
     const ALLOWED_BUTTONS = [
       'toplantı planla',
       'gerçek kişi ile görüş',
-      'gerçek kişiyle görüş',
       'fiyat bilgisi',
       'demo talep et',
       'hizmetleri anlat',
+      'referanslar',
+      'nasıl başlayabilirim',
       'başka sorum var',
       'evet',
-      'hayır',
-      'teşekkürler'
+      'hayır'
     ];
     
     try {
@@ -430,11 +444,10 @@ Her zaman TÜRKÇE cevap ver. İngilizce terim kullanma.`;
         const parsed = JSON.parse(match[0]);
         const replies = parsed.quickReplies || [];
         
-        // Sadece whitelist'teki butonları geçir
         return replies.filter(btn => {
           const lower = btn.toLowerCase().trim();
           return ALLOWED_BUTTONS.some(allowed => lower.includes(allowed));
-        }).slice(0, 3); // Max 3 buton
+        }).slice(0, 3);
       }
     } catch (e) {}
     return [];
