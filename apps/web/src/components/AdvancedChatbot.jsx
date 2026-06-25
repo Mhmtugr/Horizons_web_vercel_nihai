@@ -4,7 +4,7 @@ import { AlertCircle, X, CheckCircle2, History, Trash2, Send, User, MessageSquar
 import CalendlyWidget from './CalendlyWidget.jsx';
 
 // ============================================
-// 🚀 ZERO-API-KEY AI ENGINE (KESİN ÇALIŞIR)
+// 🚀 ZERO-API-KEY AI ENGINE (POLLINATIONS)
 // ============================================
 
 const INITIAL_QUESTIONS = [
@@ -16,77 +16,67 @@ const INITIAL_QUESTIONS = [
 ];
 
 // ============================================
-// 🤖 KEY'SİZ AI PROVIDER'LARI (SIRAYLA DENENECEK)
+// 🏢 SABİT GERÇEK ŞİRKET VERİLERİ (HALLUCINATION KALKANI)
+// ============================================
+const COMPANY_REAL_DATA = {
+  email: "info@nexaotomasyon.com.tr",
+  whatsapp: "+90 546 866 72 15",
+  whatsappLink: "https://wa.me/905468667215",
+  website: "https://novaotomasyon.com",
+  address: "İstanbul, Türkiye",
+  // AI bu bilgiler DIŞINDA hiçbir iletişim bilgisi üretemez
+};
+
+// ============================================
+// 🤖 AI PROVIDER'LARI (SIRAYLA DENENECEK)
 // ============================================
 const PROVIDERS = [
-  {
-    name: "Pollinations OpenAI",
-    type: "pollinations",
-    model: "openai",
-    priority: 1
-  },
-  {
-    name: "Pollinations Mistral",
-    type: "pollinations",
-    model: "mistral",
-    priority: 2
-  },
-  {
-    name: "Pollinations Llama",
-    type: "pollinations",
-    model: "llama",
-    priority: 3
-  }
+  { name: "OpenAI GPT", model: "openai", priority: 1 },
+  { name: "Mistral Large", model: "mistral-large", priority: 2 },
+  { name: "Llama 3.3", model: "llama", priority: 3 }
 ];
 
 // ============================================
-// 🌐 KEY'SİZ AI ÇAĞRI FONKSİYONU
+// 🌐 NATIVE FETCH AI ÇAĞRI (PAKET GEREKTİRMEZ)
 // ============================================
 const callPollinations = async (model, messages, systemPrompt) => {
   const response = await fetch("https://text.pollinations.ai/openai", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: model,
       messages: [
         { role: "system", content: systemPrompt },
         ...messages
       ],
-      temperature: 0.7,
+      temperature: 0.4, // Düşük temperature = daha az yalan
+      seed: Math.floor(Math.random() * 1000000)
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`Pollinations ${model}: HTTP ${response.status}`);
+    throw new Error(`HTTP ${response.status}`);
   }
 
   const data = await response.json();
   const content = data.choices?.[0]?.message?.content || "";
   
   if (!content || content.trim().length === 0) {
-    throw new Error(`Pollinations ${model}: Boş yanıt`);
+    throw new Error("Boş yanıt");
   }
   
   return content;
 };
 
-// ============================================
-// 🔄 FALLBACK MOTORU (BİRİ MUTLAKA ÇALIŞIR)
-// ============================================
 const callAIWithFallback = async (messages, systemPrompt) => {
   const errors = [];
   
   for (const provider of PROVIDERS) {
     try {
       console.log(`🔄 [${provider.priority}] ${provider.name} deneniyor...`);
-      
       const content = await callPollinations(provider.model, messages, systemPrompt);
-      
       console.log(`✅ ${provider.name} başarılı!`);
       return { success: true, content, provider: provider.name };
-      
     } catch (err) {
       const errorMsg = `${provider.name}: ${err.message}`;
       console.warn(`❌ ${errorMsg}`);
@@ -95,11 +85,40 @@ const callAIWithFallback = async (messages, systemPrompt) => {
     }
   }
   
-  return {
-    success: false,
-    error: errors.join('\n'),
-    provider: null
-  };
+  return { success: false, error: errors.join('\n'), provider: null };
+};
+
+// ============================================
+// 🛡️ GÜVENLİK KATMANI: YALAN FİLTRESİ
+// ============================================
+const sanitizeAIResponse = (text) => {
+  if (!text) return text;
+  
+  // Olası uydurma email/telefon kalıplarını tespit et (gerçek olanlar hariç)
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  const foundEmails = text.match(emailRegex) || [];
+  
+  for (const email of foundEmails) {
+    if (email.toLowerCase() !== COMPANY_REAL_DATA.email.toLowerCase()) {
+      // Uydurma email bulundu, yanıtı reddet
+      console.warn(`🛡️ HALLUCINATION TESPİT: Uydurma email bulundu: ${email}`);
+      return null; // null = geçersiz yanıt
+    }
+  }
+  
+  // Telefon numarası kontrolü (Türkiye formatı)
+  const phoneRegex = /(\+?90)?[\s-]?\(?0?5\d{2}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/g;
+  const foundPhones = text.match(phoneRegex) || [];
+  
+  for (const phone of foundPhones) {
+    const cleanPhone = phone.replace(/[\s\-\(\)]/g, '');
+    if (!cleanPhone.includes('905468667215') && !cleanPhone.includes('5468667215')) {
+      console.warn(`🛡️ HALLUCINATION TESPİT: Uydurma telefon bulundu: ${phone}`);
+      return null;
+    }
+  }
+  
+  return text;
 };
 
 export default function AdvancedChatbot() {
@@ -267,27 +286,68 @@ export default function AdvancedChatbot() {
     }
   };
 
-  const SYSTEM_PROMPT = `Senin adın Nova. Sen Nova Teknoloji'nin Kıdemli İş Geliştirme Asistanısın (İş Kapatıcısın).
-    Asla bir sohbet robotu gibi pasif durma, kısa, saygılı, prestijli (Tesla markası tonunda) cevaplar ver. 
-    Lafı uzatma, sürtünmeyi azalt ve sonuç üret.
-    
-    # HİZMET BİLGİSİ
-    Otonom Üretim & Fabrika Zekası, RPA (Robotik Süreç Otomasyonu), B2B Küresel Müşteri Radarı, Küresel İhale Takibi, Kapsamlı Büyüme Stratejisi, Satıştan Sevkiyata kadar olan süreçte ki üretim süreçlerinin yapay zeka destekli takip ve analiz programı (Yapay zeka destekli Ceo yardımcısı), Elektrik mühendisliği alanında enerji dönüşümü (Enerji takibi ve verimliliği) gibi B2B hizmetler verirsiniz. Müşteriye uygun olduğunu anlatıp '15 dk Demo' teklif et.
-    
-    # FİYAT POLİTİKASI
-    Sürekli "kişiden kişiye değişir" DEME! Açık fiyat bantlarını VERECEKSIN.
-    Kurulum (Setup) ve Başlangıç Maliyeti: Karmaşıklığa ve kullanılacak API/AI modellerine göre 1.000€ (EUR) ile 10.000€ arasında değişmektedir. Bu fiyat bilgisini asla direkt müşteri ile paylaşma çünkü çok amatör gözükür, müşteri fiyatlama konusunda çok ısrarcı davranırsa ancak o zaman son durumda bu şekilde bir fiyat bilgi paylaşılabilir.
-    Aylık Bakım, Geliştirme, Barındırma ve SLA Paketleri: Operasyon hacmine göre aylık 100€ ile 3.000€ arasında fiyatlandırılmaktadır. 
-    Bu hizmetler müşterilere bir gider değil; eleman azaltımı, zaman tasarrufu olarak "Asimetrik bir Getiri" sağlar. 
-    
-    # DİNAMİK BUTON ÇIKARTMA SİHİRLİ ÖZELLİĞİ:
-    Cevabının TAM SONUNDA mutlaka {"quickReplies":["Buton1", "Buton2", "Buton3"]} yapısında geçerli, bağlama en uygun JSON Array döndüreceksin. Toplantı isteyene hızlı butona 'Toplantı planla' kelimesini zorla ekle! Her buton adı maximum 3 kelime olsun.
+  // ============================================
+  // 🛡️ SERTLEŞTİRİLMİŞ SYSTEM PROMPT (CEO SEVİYESİ)
+  // ============================================
+  const SYSTEM_PROMPT = `Sen Nova'sın. Nova Teknoloji'nin Kıdemli İş Geliştirme Asistanısın.
+Tonun: Tesla/Apple seviyesinde prestijli, kısa, net, sonuç odaklı. Asla robotik olma.
 
-    # TOPLANTI ÇAĞRISI MANTIGI (EMİR!)
-    Eğer müşteri net olarak "Randevu", "Görüşelim", "Yarın ara", "14:00'te toplantı" veya "Toplantı ayarla" gibi net zaman talebi girerse; GEREKSİZ CÜMLE KURMA!
-    Şu şekilde direktif ver: "Sizi takvimimde görmekten mutluluk duyacağım. Müsait saati netleştirmek için lütfen yandaki Toplantı butonuna tıklayın."
-    Bu senaryoda da "Toplantı planla" kelimesini quick replies JSON içine zorla ekle.
-    `;
+# 🚨 KRİTİK KURAL 1: ASLA BİLGİ UYDURMA
+- Sadece aşağıda verilen GERÇEK bilgiler DIŞINDA hiçbir bilgi VERME.
+- Bilmediğin bir şey sorulursa KESİNLİKLE şunu söyle: "Bu konuda net bilgi vermek istemem, sizi uzman ekibimize yönlendireyim."
+- HİÇBİR ZAMAN uydurma email adresi, telefon numarası, adres, fiyat, çalışan ismi ÜRETME.
+- "İletişim", "mail", "telefon", "adres" gibi sorularda SADECE aşağıdaki bilgileri kullan:
+
+📧 E-POSTA: ${COMPANY_REAL_DATA.email}
+📱 WHATSAPP: ${COMPANY_REAL_DATA.whatsapp}
+🌐 WEB: ${COMPANY_REAL_DATA.website}
+📍 KONUM: ${COMPANY_REAL_DATA.address}
+
+# 🚨 KRİTİK KURAL 2: HİZMET BİLGİSİ (SABİT LİSTE)
+Sadece şu hizmetleri veriyorsun:
+1. Otonom Üretim & Fabrika Zekası
+2. RPA (Robotik Süreç Otomasyonu)
+3. B2B Küresel Müşteri Radarı
+4. Küresel İhale Takibi
+5. Kapsamlı Büyüme Stratejisi
+6. AI Destekli CEO Yardımcısı (Satıştan Sevkiyata takip)
+7. Enerji Dönüşümü & Verimlilik (Elektrik Mühendisliği)
+
+Bu liste DIŞINDA bir hizmet sorulursa: "Bu hizmet şu an portföyümüzde yok, ancak uzman ekibimiz sizinle görüşüp değerlendirebilir." de.
+
+# 💰 FİYAT POLİTİKASI
+- Kurulum: 1.000€ - 10.000€ (sadece çok ısrar edilirse söyle)
+- Aylık Paketler: 100€ - 3.000€
+- Her zaman "15 dakikalık ücretsiz demo" teklif et.
+
+# 🎯 DİNAMİK BUTON KURALLARI (ÇOK ÖNEMLİ)
+Cevabının TAM SONUNDA sadece şu formatta JSON döndür:
+{"quickReplies":["Buton1","Buton2","Buton3"]}
+
+İZİNLİ BUTONLAR (sadece bunları kullan, başkasını UYDURMA):
+- "Toplantı planla" (toplantı/randevu isteyenlere ZORUNLU ekle)
+- "Gerçek kişi ile görüş" (şikayet/karmaşık konularda)
+- "Fiyat bilgisi" (fiyat sorulduğunda)
+- "Demo talep et" (ilgi gösterenlere)
+- "Hizmetleri anlat" (genel sorularda)
+- "Başka sorum var" (devam etmek isteyenlere)
+
+Her buton MAX 3 kelime. Her cevapda max 3 buton.
+
+# 📅 TOPLANTI TALEBİ
+Müşteri "randevu", "görüşelim", "toplantı" derse:
+"Sizi takvimimde görmekten mutluluk duyacağım. Müsait saati netleştirmek için lütfen yandaki Toplantı butonuna tıklayın."
++ quickReplies'e ZORUNLU "Toplantı planla" ekle.
+
+# ❌ YASAKLI DAVRANIŞLAR
+- "İletişim için: info@falan.com" gibi UYDURMA email yazma
+- "+90 5XX XXX XX XX" gibi UYDURMA telefon yazma
+- "Şu adreste bulunuyoruz: ..." gibi UYDURMA adres yazma
+- Olmayan hizmet isimleri uydurma
+- "Kişiden kişiye değişir" DE (net fiyat bantları ver)
+
+# 🇹🇷 DİL
+Her zaman TÜRKÇE cevap ver. İngilizce terim kullanma.`;
 
   const handleSendMessage = async (textToProcess) => {
     const text = typeof textToProcess === 'string' ? textToProcess : inputValue;
@@ -303,7 +363,7 @@ export default function AdvancedChatbot() {
     dismissError();
 
     try {
-      const messages = newMessagesHistory.slice(-5).map(m => ({
+      const messages = newMessagesHistory.slice(-6).map(m => ({
         role: m.role === 'user' ? 'user' : 'assistant',
         content: m.content
       }));
@@ -312,24 +372,34 @@ export default function AdvancedChatbot() {
       const result = await callAIWithFallback(messages, SYSTEM_PROMPT);
 
       if (result.success) {
-        console.log(`✅ Başarılı yanıt alındı: ${result.provider}`);
-        setLocalMessages([...newMessagesHistory, { 
-          role: 'assistant', 
-          content: result.content, 
-          created: new Date().toISOString() 
-        }]);
+        // 🛡️ HALLUCINATION FİLTRESİ UYGULA
+        const sanitized = sanitizeAIResponse(result.content);
+        
+        if (sanitized === null) {
+          // Uydurma bilgi tespit edildi, güvenli fallback yanıt
+          console.warn("🛡️ Yanıt hallucination filtresine takıldı, güvenli yanıt kullanılıyor.");
+          setLocalMessages([...newMessagesHistory, { 
+            role: 'assistant', 
+            content: `Size en doğru bilgiyi sunabilmem için uzman ekibimize yönlendirmek istiyorum. Doğrudan iletişim kanallarımız:\n\n📧 ${COMPANY_REAL_DATA.email}\n📱 ${COMPANY_REAL_DATA.whatsapp}\n\n{"quickReplies":["Gerçek kişi ile görüş","Toplantı planla","Demo talep et"]}`,
+            created: new Date().toISOString() 
+          }]);
+        } else {
+          setLocalMessages([...newMessagesHistory, { 
+            role: 'assistant', 
+            content: sanitized, 
+            created: new Date().toISOString() 
+          }]);
+        }
       } else {
         throw new Error(result.error);
       }
 
     } catch (err) {
       console.error("❌ Tüm AI Provider'lar Başarısız:", err);
-      console.error("❌ Hata Detayı:", err.message);
-      
       setErrorState("Sistem geçici olarak yoğun. Lütfen 'Gerçek Kişi' butonunu kullanın.");
       setLocalMessages([...newMessagesHistory, { 
         role: 'assistant', 
-        content: "Mühendislerimizden dolayı yoğunluk algıladım. Beni hiç beklemeden lütfen aşağıdaki 'Gerçek Kişiyle Görüş' butonuna basın, sistemimiz anında bağlantı kuracaktır.", 
+        content: `Sistemimiz şu an yoğunluk yaşıyor. Size en hızlı şekilde dönüş yapabilmemiz için:\n\n📧 ${COMPANY_REAL_DATA.email}\n📱 ${COMPANY_REAL_DATA.whatsapp}\n\n{"quickReplies":["Gerçek kişi ile görüş","Toplantı planla"]}`,
         created: new Date().toISOString() 
       }]);
     } finally {
@@ -339,11 +409,32 @@ export default function AdvancedChatbot() {
 
   const extractQuickReplies = (text) => {
     if (!text) return [];
+    
+    // İZİNLİ BUTON WHITELIST
+    const ALLOWED_BUTTONS = [
+      'toplantı planla',
+      'gerçek kişi ile görüş',
+      'gerçek kişiyle görüş',
+      'fiyat bilgisi',
+      'demo talep et',
+      'hizmetleri anlat',
+      'başka sorum var',
+      'evet',
+      'hayır',
+      'teşekkürler'
+    ];
+    
     try {
       const match = text.match(/\{"quickReplies"\s*:\s*\[.*?\]\}/s);
       if (match) {
         const parsed = JSON.parse(match[0]);
-        return parsed.quickReplies || [];
+        const replies = parsed.quickReplies || [];
+        
+        // Sadece whitelist'teki butonları geçir
+        return replies.filter(btn => {
+          const lower = btn.toLowerCase().trim();
+          return ALLOWED_BUTTONS.some(allowed => lower.includes(allowed));
+        }).slice(0, 3); // Max 3 buton
       }
     } catch (e) {}
     return [];
@@ -355,11 +446,14 @@ export default function AdvancedChatbot() {
   };
 
   const handleQuickReplyClick = (buttonText) => {
-    if (buttonText.toLowerCase().includes('toplantı') || buttonText.toLowerCase().includes('randevu') || buttonText.toLowerCase().includes('planla')) {
+    const lower = buttonText.toLowerCase();
+    
+    if (lower.includes('toplantı') || lower.includes('randevu') || lower.includes('planla')) {
+      setShowCalendly(true);
       window.dispatchEvent(new Event('open-calendar-modal'));
       return;
     }
-    if (buttonText.toLowerCase().includes('gerçek kişi') || buttonText.toLowerCase().includes('canlı') || buttonText.toLowerCase().includes('operatör')) {
+    if (lower.includes('gerçek kişi') || lower.includes('canlı') || lower.includes('operatör')) {
       handleEscalateToHuman();
       return;
     }
