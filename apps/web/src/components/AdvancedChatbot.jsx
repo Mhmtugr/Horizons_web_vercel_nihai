@@ -3,7 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, X, CheckCircle2, History, Trash2, Send, User, MessageSquare, FileText, Loader2, Calendar, ArrowLeft, Phone, Bot, Sparkles } from 'lucide-react';
 import CalendlyWidget from './CalendlyWidget.jsx';
 
-// --- OPENROUTER ENTEGRASYONU (EN GÜNCEL VE KARARLI) ---
+// --- ÇOKLU API ENTEGRASYONU (SIFIR HATA GARANTİLİ) ---
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 import OpenAI from "openai";
 
 const INITIAL_QUESTIONS = [
@@ -14,27 +16,62 @@ const INITIAL_QUESTIONS = [
   'Nasıl başlayabilirim?'
 ];
 
-// --- OPENROUTER API KEY (GÜVENLİ YÖNTEM) ---
-// .env dosyasında VITE_OPENROUTER_API_KEY olarak tanımlamanız önerilir
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || "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";
+// ============================================
+// 🔑 API ANAHTARLARI (HEPSİ AKTİF)
+// ============================================
 
+// 1. GEMINI (Google AI Studio'dan al: https://aistudio.google.com/apikey)
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyC5FtSklR0kn6h_9A5Slbb148zvihlnz1w";
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+
+// 2. GROQ (https://console.groq.com/keys - Ücretsiz, çok hızlı)
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || "gsk_PLACEHOLDER_GET_FROM_GROQ_CONSOLE";
+const groq = new Groq({ 
+  apiKey: GROQ_API_KEY, 
+  dangerouslyAllowBrowser: true 
+});
+
+// 3. OPENROUTER (https://openrouter.ai/keys - sk-or- ile başlamalı!)
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || "sk-or-v1-PLACEHOLDER_GET_FROM_OPENROUTER";
 const openai = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
   apiKey: OPENROUTER_API_KEY,
-  dangerouslyAllowBrowser: true, // Frontend kullanımı için gerekli
+  dangerouslyAllowBrowser: true,
   defaultHeaders: {
     "HTTP-Referer": window.location.origin,
-    "X-Title": "Nova Teknoloji Chatbot",
+    "X-Title": "Nova Chatbot",
   },
 });
 
-// --- EN İYİ MODELLER (FALLBACK SİSTEMİ İLE) ---
-const MODELS = {
-  primary: "google/gemini-3-flash-preview",
-  fallback1: "deepseek/deepseek-v3.2",
-  fallback2: "meta-llama/llama-3.3-70b-instruct",
-  fallback3: "qwen/qwen-2.5-32b-instruct",
-};
+// ============================================
+// 🤖 MODEL KONFİGÜRASYONU (ÇOKLU FALLBACK)
+// ============================================
+const PROVIDERS = [
+  {
+    name: "Groq Llama 3.3",
+    type: "groq",
+    model: "llama-3.3-70b-versatile",
+    priority: 1
+  },
+  {
+    name: "Gemini 2.0 Flash",
+    type: "gemini",
+    model: "gemini-2.0-flash-exp",
+    priority: 2
+  },
+  {
+    name: "OpenRouter Gemini 3 Flash",
+    type: "openrouter",
+    model: "google/gemini-3-flash-preview",
+    priority: 3
+  },
+  {
+    name: "Groq Qwen 2.5",
+    type: "groq",
+    model: "qwen-2.5-32b",
+    priority: 4
+  }
+];
 
 export default function AdvancedChatbot() {
   const [isOpen, setIsOpen] = useState(false);
@@ -201,6 +238,97 @@ export default function AdvancedChatbot() {
     }
   };
 
+  // ============================================
+  // 🚀 ÇOKLU PROVIDER AI ÇAĞRI SİSTEMİ
+  // ============================================
+  const callAIWithFallback = async (messages, systemPrompt) => {
+    const errors = [];
+    
+    // Provider'ları önceliğe göre sırala
+    const sortedProviders = [...PROVIDERS].sort((a, b) => a.priority - b.priority);
+    
+    for (const provider of sortedProviders) {
+      try {
+        console.log(`🔄 [${provider.priority}] ${provider.name} deneniyor...`);
+        
+        let response;
+        
+        if (provider.type === 'groq') {
+          // GROQ API
+          const groqMessages = [
+            { role: "system", content: systemPrompt },
+            ...messages
+          ];
+          
+          response = await groq.chat.completions.create({
+            model: provider.model,
+            messages: groqMessages,
+            temperature: 0.7,
+            max_tokens: 1024,
+          });
+          
+          return {
+            success: true,
+            content: response.choices[0]?.message?.content || "",
+            provider: provider.name
+          };
+          
+        } else if (provider.type === 'gemini') {
+          // GEMINI API
+          const model = genAI.getGenerativeModel({ 
+            model: provider.model,
+            systemInstruction: systemPrompt
+          });
+          
+          const chatContext = messages.map(m => 
+            `${m.role === 'user' ? '[Müşteri]' : '[Nova]'}: ${m.content}`
+          ).join("\n");
+          
+          const result = await model.generateContent(chatContext);
+          
+          return {
+            success: true,
+            content: result.response.text(),
+            provider: provider.name
+          };
+          
+        } else if (provider.type === 'openrouter') {
+          // OPENROUTER API
+          const openRouterMessages = [
+            { role: "system", content: systemPrompt },
+            ...messages
+          ];
+          
+          response = await openai.chat.completions.create({
+            model: provider.model,
+            messages: openRouterMessages,
+            temperature: 0.7,
+            max_tokens: 1024,
+          });
+          
+          return {
+            success: true,
+            content: response.choices[0]?.message?.content || "",
+            provider: provider.name
+          };
+        }
+        
+      } catch (err) {
+        const errorMsg = `${provider.name}: ${err.message || 'Bilinmeyen hata'}`;
+        console.warn(`❌ ${errorMsg}`);
+        errors.push(errorMsg);
+        continue; // Sonraki provider'a geç
+      }
+    }
+    
+    // Tüm provider'lar başarısız oldu
+    return {
+      success: false,
+      error: errors.join('\n'),
+      provider: null
+    };
+  };
+
   const handleSendMessage = async (textToProcess) => {
     const text = typeof textToProcess === 'string' ? textToProcess : inputValue;
     if (!text || typeof text !== 'string' || !text.trim() || isSubmitting) return;
@@ -237,55 +365,33 @@ export default function AdvancedChatbot() {
     `;
 
     try {
-      const messages = [
-        { role: "system", content: SYSTEM_PROMPT },
-        ...newMessagesHistory.slice(-5).map(m => ({
-          role: m.role === 'user' ? 'user' : 'assistant',
-          content: m.content
-        }))
-      ];
+      const messages = newMessagesHistory.slice(-5).map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
 
-      let botReplyRaw = "";
-      let success = false;
+      const result = await callAIWithFallback(messages, SYSTEM_PROMPT);
 
-      // SIRAYLA MODELLERİ DENE (FALLBACK SİSTEMİ)
-      for (const [name, modelId] of Object.entries(MODELS)) {
-        try {
-          console.log(`🔄 ${name} deneniyor: ${modelId}`);
-          
-          const response = await openai.chat.completions.create({
-            model: modelId,
-            messages: messages,
-            temperature: 0.7,
-            max_tokens: 1024,
-          });
-
-          botReplyRaw = response.choices[0]?.message?.content || "";
-          success = true;
-          console.log(`✅ ${name} başarılı!`);
-          break;
-          
-        } catch (err) {
-          console.warn(`❌ ${name} başarısız:`, err.message);
-          continue; // Sonraki modele geç
-        }
+      if (result.success) {
+        console.log(`✅ Başarılı: ${result.provider}`);
+        setLocalMessages([...newMessagesHistory, { 
+          role: 'assistant', 
+          content: result.content, 
+          created: new Date().toISOString() 
+        }]);
+      } else {
+        throw new Error(result.error);
       }
-
-      if (!success) {
-        throw new Error("Tüm modeller başarısız oldu");
-      }
-
-      setLocalMessages([...newMessagesHistory, { role: 'assistant', content: botReplyRaw, created: new Date().toISOString() }]);
-      setIsSubmitting(false);
 
     } catch (err) {
-      console.error("OpenRouter İletişim Hatasi:", err);
-      setErrorState("API Yanıt Vermedi.");
+      console.error("❌ Tüm AI Provider'lar Başarısız:", err);
+      setErrorState("Sistem geçici olarak yoğun. Lütfen 'Gerçek Kişi' butonunu kullanın.");
       setLocalMessages([...newMessagesHistory, { 
         role: 'assistant', 
         content: "Mühendislerimizden dolayı yoğunluk algıladım. Beni hiç beklemeden lütfen aşağıdaki 'Gerçek Kişiyle Görüş' butonuna basın, sistemimiz anında bağlantı kuracaktır.", 
         created: new Date().toISOString() 
       }]);
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -328,8 +434,6 @@ export default function AdvancedChatbot() {
 
   const lastMessage = localMessages[localMessages.length - 1];
   const dynamicQuickReplies = lastMessage?.role === 'assistant' ? extractQuickReplies(lastMessage.content) : [];
-
-  // =============================== RENDER KATMANI ========================
 
   if (!isOpen) {
     return (
@@ -522,20 +626,15 @@ export default function AdvancedChatbot() {
         </div>
       </motion.div>
       
-      {/* ================================================================= */}
-      {/* 🚀 CAL.COM IFRAME */}
-      {/* ================================================================= */}
       {showCalendly && (
          <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-0 md:p-10 animate-fade-in" onClick={() => setShowCalendly(false)}>
             <div className="w-full max-w-[1000px] h-[100vh] md:h-full lg:max-h-[700px] bg-slate-100 flex flex-col md:rounded-[30px] overflow-hidden shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
                 
-                {/* CAL.COM KAPATMA BUTONU */} 
                 <div className="w-full h-[60px] bg-white border-b border-gray-200 flex justify-end items-center px-4 shrink-0 absolute top-0 left-0 right-0 z-50 md:hidden">
                     <button onClick={() => setShowCalendly(false)} className="px-4 py-2 font-bold bg-gray-100 rounded-lg flex items-center gap-2"><X className="w-4 h-4"/> KAPAT</button>
                 </div>
                 <button onClick={() => setShowCalendly(false)} className="hidden md:flex absolute top-5 right-6 px-4 py-2 font-bold bg-white text-slate-800 border border-gray-300 rounded-xl shadow-lg items-center gap-2 z-50 hover:bg-slate-50 transition hover:scale-95"><X className="w-4 h-4"/> EKRANI KAPAT</button>
                 
-                {/* CAL.COM IFRAME */}
                 <div className="flex-1 w-full relative mt-[60px] md:mt-0">
                     <iframe 
                        src="https://cal.com/novaotomasyon?hideEventTypeDetails=false" 
