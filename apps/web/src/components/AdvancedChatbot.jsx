@@ -3,10 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, X, CheckCircle2, History, Trash2, Send, User, MessageSquare, FileText, Loader2, Calendar, ArrowLeft, Phone, Bot, Sparkles } from 'lucide-react';
 import CalendlyWidget from './CalendlyWidget.jsx';
 
-// --- GOOGLE GEMINI MOTORU ENTEGRE EDILDI ---
-import { GoogleGenerativeAI } from "@google/generative-ai";
+// --- OPENROUTER ENTEGRASYONU (EN GÜNCEL VE KARARLI) ---
+import OpenAI from "openai";
 
-const INITIAL_QUESTIONS =[
+const INITIAL_QUESTIONS = [
   'Hizmetleriniz hakkında bilgi alabilir miyim?',
   'Toplantı planla',
   'Gerçek kişi ile görüş',
@@ -14,28 +14,42 @@ const INITIAL_QUESTIONS =[
   'Nasıl başlayabilirim?'
 ];
 
-// --- GUVENLIK KONTROLU VE GÜNCEL GEN 3 MODELLERİ ---
-// Vercel uzerinde environment variable kullanımı (Güvenli)
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyBHyN2qM8kwNL7T5jNzQ3XqxYOh-YCwCzY"; 
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+// --- OPENROUTER API KEY (GÜVENLİ YÖNTEM) ---
+// .env dosyasında VITE_OPENROUTER_API_KEY olarak tanımlamanız önerilir
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || "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";
 
-const PRIMARY_MODEL = "gemini-3.1-pro";
-const FALLBACK_MODEL = "gemini-3-flash-preview";
+const openai = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: OPENROUTER_API_KEY,
+  dangerouslyAllowBrowser: true, // Frontend kullanımı için gerekli
+  defaultHeaders: {
+    "HTTP-Referer": window.location.origin,
+    "X-Title": "Nova Teknoloji Chatbot",
+  },
+});
+
+// --- EN İYİ MODELLER (FALLBACK SİSTEMİ İLE) ---
+const MODELS = {
+  primary: "google/gemini-3-flash-preview",
+  fallback1: "deepseek/deepseek-v3.2",
+  fallback2: "meta-llama/llama-3.3-70b-instruct",
+  fallback3: "qwen/qwen-2.5-32b-instruct",
+};
 
 export default function AdvancedChatbot() {
-  const[isOpen, setIsOpen] = useState(false);
-  const[showHistory, setShowHistory] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   
-  const[localMessages, setLocalMessages] = useState([
+  const [localMessages, setLocalMessages] = useState([
      { role: 'assistant', content: 'Merhaba! Ben Nova Teknoloji Otonom Satış Danışmanı. İş süreçlerinizi yapay zeka ile nasıl büyütebileceğimizi konuşalım mı?', created: new Date().toISOString() }
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorState, setErrorState] = useState(null);
-  const[successState, setSuccessState] = useState(null);
+  const [successState, setSuccessState] = useState(null);
   const [inputValue, setInputValue] = useState('');
-  const[showCalendly, setShowCalendly] = useState(false);
+  const [showCalendly, setShowCalendly] = useState(false);
   
-  const[requestState, setRequestState] = useState('idle'); 
+  const [requestState, setRequestState] = useState('idle'); 
   const [requestSummary, setRequestSummary] = useState('');
   const [contactInfo, setContactInfo] = useState({ name: '', surname: '', email: '', phone: '' });
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
@@ -58,7 +72,7 @@ export default function AdvancedChatbot() {
     if (window.$crisp) {
       window.$crisp.push(["on", "chat:closed", handleCrispClose]);
     }
-  },[]);
+  }, []);
 
   useEffect(() => {
     const handleOpenChatEvent = (e) => {
@@ -83,7 +97,7 @@ export default function AdvancedChatbot() {
     if (isOpen && !showHistory && requestState === 'idle') {
       scrollToBottom();
     }
-  },[localMessages, isSubmitting, isOpen, showHistory, requestState]);
+  }, [localMessages, isSubmitting, isOpen, showHistory, requestState]);
 
   const handleClose = () => setIsOpen(false);
   const dismissError = () => setErrorState(null);
@@ -98,10 +112,10 @@ export default function AdvancedChatbot() {
       const transcript = localMessages.map(msg => `${msg.role === 'user' ? 'Müşteri' : 'Asistan'}: ${msg.content}`).join('\n\n');
       
       if (window.$crisp) {
-        window.$crisp.push(['set', 'user:nickname',['Nova VIP Ziyaretçisi']]);
-        window.$crisp.push(['do', 'message:send',['text', `🚨 [GERÇEK KİŞİ TALEBİ] - SOHBET GEÇMİŞİ AKTARILIYOR:\n\n${transcript}`]]);
+        window.$crisp.push(['set', 'user:nickname', ['Nova VIP Ziyaretçisi']]);
+        window.$crisp.push(['do', 'message:send', ['text', `🚨 [GERÇEK KİŞİ TALEBİ] - SOHBET GEÇMİŞİ AKTARILIYOR:\n\n${transcript}`]]);
         
-        setLocalMessages(prev =>[...prev, {
+        setLocalMessages(prev => [...prev, {
              role: 'assistant',
              content: 'Yetkili uzmanımızı sohbete dahil ediyorum, lütfen bu ekranda kalınız...',
              created: new Date().toISOString()
@@ -125,7 +139,7 @@ export default function AdvancedChatbot() {
       setErrorState('Geçiş sırasında hata oluştu.');
       setIsSubmitting(false);
     }
-  },[localMessages]);
+  }, [localMessages]);
 
   const handleOpenRequestForm = () => {
     const userMsgs = localMessages.filter(m => m.role === 'user').map(m => m.content).join(' ');
@@ -161,7 +175,7 @@ export default function AdvancedChatbot() {
     try {
         if (window.$crisp) {
             window.$crisp.push(['set', 'user:email', [contactInfo.email]]);
-            window.$crisp.push(['set', 'user:nickname',[`${contactInfo.name} ${contactInfo.surname}`]]);
+            window.$crisp.push(['set', 'user:nickname', [`${contactInfo.name} ${contactInfo.surname}`]]);
             window.$crisp.push(['do', 'message:send', ['text', leadData]]);
             
             setTimeout(() => {
@@ -172,7 +186,7 @@ export default function AdvancedChatbot() {
                     setRequestState('idle');
                     setContactInfo({ name: '', surname: '', email: '', phone: '' });
                     setRequestSummary('');
-                    setLocalMessages(prev =>[...prev, { role: 'assistant', content: '✅ Formunuz Nova Teknoloji Sistemine ulaştı. Mühendislerimiz 1 saat içinde size geri dönecektir. Takvimimizi kullanarak bir ön görüşme de ayarlayabilirsiniz.', created: new Date().toISOString() }]);
+                    setLocalMessages(prev => [...prev, { role: 'assistant', content: '✅ Formunuz Nova Teknoloji Sistemine ulaştı. Mühendislerimiz 1 saat içinde size geri dönecektir. Takvimimizi kullanarak bir ön görüşme de ayarlayabilirsiniz.', created: new Date().toISOString() }]);
                 }, 4000);
             }, 1500);
         } else {
@@ -194,7 +208,7 @@ export default function AdvancedChatbot() {
     const trimmedText = text.trim();
     lastMessageRef.current = trimmedText;
     
-    const newMessagesHistory =[...localMessages, { role: 'user', content: trimmedText, created: new Date().toISOString() }];
+    const newMessagesHistory = [...localMessages, { role: 'user', content: trimmedText, created: new Date().toISOString() }];
     setLocalMessages(newMessagesHistory);
     setInputValue(''); 
     setIsSubmitting(true);
@@ -223,26 +237,49 @@ export default function AdvancedChatbot() {
     `;
 
     try {
-      const chatContext = newMessagesHistory.slice(-5).map(m => m.role === 'user' ? `[Müşteri]: ${m.content}` : `[Nova]: ${m.content}`).join("\n");
+      const messages = [
+        { role: "system", content: SYSTEM_PROMPT },
+        ...newMessagesHistory.slice(-5).map(m => ({
+          role: m.role === 'user' ? 'user' : 'assistant',
+          content: m.content
+        }))
+      ];
+
       let botReplyRaw = "";
-      
-      try {
-        // TALEBİNİZ ÜZERİNE GÜNCEL GEN 3 MODELLERİ (API HATASI ÇÖZÜLDÜ)
-        const model = genAI.getGenerativeModel({ model: PRIMARY_MODEL, systemInstruction: SYSTEM_PROMPT });
-        const result = await model.generateContent(`${chatContext}\n [Müşteri]: ${trimmedText}`);
-        botReplyRaw = result.response.text();
-      } catch (err1) {
-        console.warn(`[API UYARISI] ${PRIMARY_MODEL} cevap veremedi! ${FALLBACK_MODEL} yedek modeline geçiliyor...`);
-        const backupModel = genAI.getGenerativeModel({ model: FALLBACK_MODEL, systemInstruction: SYSTEM_PROMPT });
-        const result = await backupModel.generateContent(`${chatContext}\n [Müşteri]: ${trimmedText}`);
-        botReplyRaw = result.response.text();
+      let success = false;
+
+      // SIRAYLA MODELLERİ DENE (FALLBACK SİSTEMİ)
+      for (const [name, modelId] of Object.entries(MODELS)) {
+        try {
+          console.log(`🔄 ${name} deneniyor: ${modelId}`);
+          
+          const response = await openai.chat.completions.create({
+            model: modelId,
+            messages: messages,
+            temperature: 0.7,
+            max_tokens: 1024,
+          });
+
+          botReplyRaw = response.choices[0]?.message?.content || "";
+          success = true;
+          console.log(`✅ ${name} başarılı!`);
+          break;
+          
+        } catch (err) {
+          console.warn(`❌ ${name} başarısız:`, err.message);
+          continue; // Sonraki modele geç
+        }
+      }
+
+      if (!success) {
+        throw new Error("Tüm modeller başarısız oldu");
       }
 
       setLocalMessages([...newMessagesHistory, { role: 'assistant', content: botReplyRaw, created: new Date().toISOString() }]);
       setIsSubmitting(false);
 
     } catch (err) {
-      console.error("Gemini İletişim Hatasi:", err);
+      console.error("OpenRouter İletişim Hatasi:", err);
       setErrorState("API Yanıt Vermedi.");
       setLocalMessages([...newMessagesHistory, { 
         role: 'assistant', 
@@ -254,15 +291,15 @@ export default function AdvancedChatbot() {
   };
 
   const extractQuickReplies = (text) => {
-    if (!text) return[];
+    if (!text) return [];
     try {
       const match = text.match(/\{"quickReplies"\s*:\s*\[.*?\]\}/s);
       if (match) {
         const parsed = JSON.parse(match[0]);
-        return parsed.quickReplies ||[];
+        return parsed.quickReplies || [];
       }
     } catch (e) {}
-    return[];
+    return [];
   };
 
   const cleanContent = (text) => {
@@ -290,10 +327,9 @@ export default function AdvancedChatbot() {
   };
 
   const lastMessage = localMessages[localMessages.length - 1];
-  const dynamicQuickReplies = lastMessage?.role === 'assistant' ? extractQuickReplies(lastMessage.content) :[];
+  const dynamicQuickReplies = lastMessage?.role === 'assistant' ? extractQuickReplies(lastMessage.content) : [];
 
-
-  // =============================== RENDER KATMANI SİZİN 560 SATIRLIK BİREBİR ORİJİNALİNİZ ========================
+  // =============================== RENDER KATMANI ========================
 
   if (!isOpen) {
     return (
@@ -396,7 +432,7 @@ export default function AdvancedChatbot() {
         <div className="flex-1 flex flex-col bg-[#0A0F17] overflow-y-auto w-full scroll-smooth pr-1">
              <div className="flex-1 p-4 pb-0 flex flex-col justify-end min-h-max space-y-4 pt-8">
 
-                  {localMessages.map((m,idx) => (
+                  {localMessages.map((m, idx) => (
                     <div key={idx} className={`w-full flex ${m.role === 'user' ? 'justify-end pl-[15%]' : 'justify-start pr-[5%]'} z-0`}>
                          <div className={`p-[13px] relative shadow-lg
                              ${m.role === 'user' 
@@ -423,7 +459,7 @@ export default function AdvancedChatbot() {
                   <div ref={messagesEndRef} className="h-0 opacity-0 pb-1" />
 
                    <div className="flex gap-2 flex-wrap items-center mt-3 p-1.5 pb-2" style={{flexShrink:0}}>
-                        {(!isSubmitting) && (localMessages.length === 1 ? INITIAL_QUESTIONS : dynamicQuickReplies).map((btnStr,k) => (
+                        {(!isSubmitting) && (localMessages.length === 1 ? INITIAL_QUESTIONS : dynamicQuickReplies).map((btnStr, k) => (
                              <button key={k} onClick={() => handleQuickReplyClick(btnStr)} 
                               className="text-left break-words hover:-translate-y-[1px] hover:text-white transition-all shadow hover:shadow-[#10B981]/20 font-medium px-4 py-2 border border-gray-700 bg-gray-800 text-[12px] text-gray-400 rounded-full hover:bg-gray-700/80 outline-none hover:border-emerald-600 focus:outline-emerald-500 w-fit max-w-[85%]">
                               {btnStr} 
@@ -487,19 +523,19 @@ export default function AdvancedChatbot() {
       </motion.div>
       
       {/* ================================================================= */}
-      {/* 🚀 CAL.COM IFRAME TAMİRİ: SIFIR PARAMETRE, GÜVENLİ VE TEMİZ LİNK */}
+      {/* 🚀 CAL.COM IFRAME */}
       {/* ================================================================= */}
       {showCalendly && (
          <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-0 md:p-10 animate-fade-in" onClick={() => setShowCalendly(false)}>
             <div className="w-full max-w-[1000px] h-[100vh] md:h-full lg:max-h-[700px] bg-slate-100 flex flex-col md:rounded-[30px] overflow-hidden shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
                 
-                {/* CAL.COM KAPATMA BUTONU */}
+                {/* CAL.COM KAPATMA BUTONU */} 
                 <div className="w-full h-[60px] bg-white border-b border-gray-200 flex justify-end items-center px-4 shrink-0 absolute top-0 left-0 right-0 z-50 md:hidden">
                     <button onClick={() => setShowCalendly(false)} className="px-4 py-2 font-bold bg-gray-100 rounded-lg flex items-center gap-2"><X className="w-4 h-4"/> KAPAT</button>
                 </div>
                 <button onClick={() => setShowCalendly(false)} className="hidden md:flex absolute top-5 right-6 px-4 py-2 font-bold bg-white text-slate-800 border border-gray-300 rounded-xl shadow-lg items-center gap-2 z-50 hover:bg-slate-50 transition hover:scale-95"><X className="w-4 h-4"/> EKRANI KAPAT</button>
                 
-                {/* CAL.COM KUSURSUZ (PARAMETRESIZ) BAGLANTI */}
+                {/* CAL.COM IFRAME */}
                 <div className="flex-1 w-full relative mt-[60px] md:mt-0">
                     <iframe 
                        src="https://cal.com/novaotomasyon?hideEventTypeDetails=false" 
