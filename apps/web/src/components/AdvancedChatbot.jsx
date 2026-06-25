@@ -4,7 +4,7 @@ import { AlertCircle, X, CheckCircle2, History, Trash2, Send, User, MessageSquar
 import CalendlyWidget from './CalendlyWidget.jsx';
 
 // ============================================
-// 🚀 ZERO-DEPENDENCY AI ENGINE (SADECE FETCH)
+// 🚀 ZERO-API-KEY AI ENGINE (KESİN ÇALIŞIR)
 // ============================================
 
 const INITIAL_QUESTIONS = [
@@ -16,61 +16,36 @@ const INITIAL_QUESTIONS = [
 ];
 
 // ============================================
-// 🔑 API ANAHTARLARI
-// ============================================
-
-// GEMINI (Google AI Studio)
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyC5FtSklR0kn6h_9A5Slbb148zvihlnz1w";
-
-// GROQ (https://console.groq.com/keys - ÜCRETSİZ, çok hızlı)
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || "";
-
-// OPENROUTER (https://openrouter.ai/keys - sk-or- ile başlamalı)
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || "";
-
-// ============================================
-// 🤖 PROVIDER KONFİGÜRASYONU (ÖNCELİK SIRASI)
+// 🤖 KEY'SİZ AI PROVIDER'LARI (SIRAYLA DENENECEK)
 // ============================================
 const PROVIDERS = [
   {
-    name: "Groq Llama 3.3",
-    type: "groq",
-    model: "llama-3.3-70b-versatile",
-    apiKey: GROQ_API_KEY,
+    name: "Pollinations OpenAI",
+    type: "pollinations",
+    model: "openai",
     priority: 1
   },
   {
-    name: "Gemini 2.0 Flash",
-    type: "gemini",
-    model: "gemini-2.0-flash-exp",
-    apiKey: GEMINI_API_KEY,
+    name: "Pollinations Mistral",
+    type: "pollinations",
+    model: "mistral",
     priority: 2
   },
   {
-    name: "Groq Qwen 2.5",
-    type: "groq",
-    model: "qwen-2.5-32b",
-    apiKey: GROQ_API_KEY,
+    name: "Pollinations Llama",
+    type: "pollinations",
+    model: "llama",
     priority: 3
-  },
-  {
-    name: "OpenRouter Gemini 3 Flash",
-    type: "openrouter",
-    model: "google/gemini-3-flash-preview",
-    apiKey: OPENROUTER_API_KEY,
-    priority: 4
   }
 ];
 
 // ============================================
-// 🌐 NATIVE FETCH AI ÇAĞRI FONKSİYONLARI
+// 🌐 KEY'SİZ AI ÇAĞRI FONKSİYONU
 // ============================================
-
-const callGroq = async (apiKey, model, messages, systemPrompt) => {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+const callPollinations = async (model, messages, systemPrompt) => {
+  const response = await fetch("https://text.pollinations.ai/openai", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -80,111 +55,37 @@ const callGroq = async (apiKey, model, messages, systemPrompt) => {
         ...messages
       ],
       temperature: 0.7,
-      max_tokens: 1024,
     }),
   });
 
   if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Groq ${response.status}: ${err.substring(0, 100)}`);
+    throw new Error(`Pollinations ${model}: HTTP ${response.status}`);
   }
 
   const data = await response.json();
-  return data.choices[0]?.message?.content || "";
-};
-
-const callGemini = async (apiKey, model, messages, systemPrompt) => {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const content = data.choices?.[0]?.message?.content || "";
   
-  const contents = messages.map(m => ({
-    role: m.role === 'user' ? 'user' : 'model',
-    parts: [{ text: m.content }]
-  }));
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: systemPrompt }] },
-      contents: contents,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 1024,
-      }
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Gemini ${response.status}: ${err.substring(0, 100)}`);
+  if (!content || content.trim().length === 0) {
+    throw new Error(`Pollinations ${model}: Boş yanıt`);
   }
-
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-};
-
-const callOpenRouter = async (apiKey, model, messages, systemPrompt) => {
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": window.location.origin,
-      "X-Title": "Nova Chatbot",
-    },
-    body: JSON.stringify({
-      model: model,
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...messages
-      ],
-      temperature: 0.7,
-      max_tokens: 1024,
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`OpenRouter ${response.status}: ${err.substring(0, 100)}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0]?.message?.content || "";
+  
+  return content;
 };
 
 // ============================================
-// 🔄 ÇOKLU FALLBACK MOTORU
+// 🔄 FALLBACK MOTORU (BİRİ MUTLAKA ÇALIŞIR)
 // ============================================
 const callAIWithFallback = async (messages, systemPrompt) => {
   const errors = [];
-  const sortedProviders = [...PROVIDERS]
-    .filter(p => p.apiKey && p.apiKey.trim() !== "")
-    .sort((a, b) => a.priority - b.priority);
-
-  if (sortedProviders.length === 0) {
-    throw new Error("Hiçbir API anahtarı yapılandırılmamış!");
-  }
-
-  for (const provider of sortedProviders) {
+  
+  for (const provider of PROVIDERS) {
     try {
       console.log(`🔄 [${provider.priority}] ${provider.name} deneniyor...`);
       
-      let content = "";
+      const content = await callPollinations(provider.model, messages, systemPrompt);
       
-      if (provider.type === 'groq') {
-        content = await callGroq(provider.apiKey, provider.model, messages, systemPrompt);
-      } else if (provider.type === 'gemini') {
-        content = await callGemini(provider.apiKey, provider.model, messages, systemPrompt);
-      } else if (provider.type === 'openrouter') {
-        content = await callOpenRouter(provider.apiKey, provider.model, messages, systemPrompt);
-      }
-      
-      if (content && content.trim().length > 0) {
-        console.log(`✅ ${provider.name} başarılı!`);
-        return { success: true, content, provider: provider.name };
-      } else {
-        throw new Error("Boş yanıt alındı");
-      }
+      console.log(`✅ ${provider.name} başarılı!`);
+      return { success: true, content, provider: provider.name };
       
     } catch (err) {
       const errorMsg = `${provider.name}: ${err.message}`;
@@ -201,9 +102,6 @@ const callAIWithFallback = async (messages, systemPrompt) => {
   };
 };
 
-// ============================================
-// 🤖 ANA CHATBOT KOMPONENTI
-// ============================================
 export default function AdvancedChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -410,9 +308,11 @@ export default function AdvancedChatbot() {
         content: m.content
       }));
 
+      console.log("🚀 AI çağrısı başlatılıyor...");
       const result = await callAIWithFallback(messages, SYSTEM_PROMPT);
 
       if (result.success) {
+        console.log(`✅ Başarılı yanıt alındı: ${result.provider}`);
         setLocalMessages([...newMessagesHistory, { 
           role: 'assistant', 
           content: result.content, 
@@ -424,6 +324,8 @@ export default function AdvancedChatbot() {
 
     } catch (err) {
       console.error("❌ Tüm AI Provider'lar Başarısız:", err);
+      console.error("❌ Hata Detayı:", err.message);
+      
       setErrorState("Sistem geçici olarak yoğun. Lütfen 'Gerçek Kişi' butonunu kullanın.");
       setLocalMessages([...newMessagesHistory, { 
         role: 'assistant', 
