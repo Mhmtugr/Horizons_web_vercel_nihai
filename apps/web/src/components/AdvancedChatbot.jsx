@@ -3,10 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AlertCircle, X, CheckCircle2, History, Trash2, Send, User, MessageSquare, FileText, Loader2, Calendar, ArrowLeft, Phone, Bot, Sparkles } from 'lucide-react';
 import CalendlyWidget from './CalendlyWidget.jsx';
 
-// --- ÇOKLU API ENTEGRASYONU (SIFIR HATA GARANTİLİ) ---
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import Groq from "groq-sdk";
-import OpenAI from "openai";
+// ============================================
+// 🚀 ZERO-DEPENDENCY AI ENGINE (SADECE FETCH)
+// ============================================
 
 const INITIAL_QUESTIONS = [
   'Hizmetleriniz hakkında bilgi alabilir miyim?',
@@ -17,62 +16,194 @@ const INITIAL_QUESTIONS = [
 ];
 
 // ============================================
-// 🔑 API ANAHTARLARI (HEPSİ AKTİF)
+// 🔑 API ANAHTARLARI
 // ============================================
 
-// 1. GEMINI (Google AI Studio'dan al: https://aistudio.google.com/apikey)
+// GEMINI (Google AI Studio)
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyC5FtSklR0kn6h_9A5Slbb148zvihlnz1w";
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-// 2. GROQ (https://console.groq.com/keys - Ücretsiz, çok hızlı)
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || "gsk_PLACEHOLDER_GET_FROM_GROQ_CONSOLE";
-const groq = new Groq({ 
-  apiKey: GROQ_API_KEY, 
-  dangerouslyAllowBrowser: true 
-});
+// GROQ (https://console.groq.com/keys - ÜCRETSİZ, çok hızlı)
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY || "";
 
-// 3. OPENROUTER (https://openrouter.ai/keys - sk-or- ile başlamalı!)
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || "sk-or-v1-PLACEHOLDER_GET_FROM_OPENROUTER";
-const openai = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: OPENROUTER_API_KEY,
-  dangerouslyAllowBrowser: true,
-  defaultHeaders: {
-    "HTTP-Referer": window.location.origin,
-    "X-Title": "Nova Chatbot",
-  },
-});
+// OPENROUTER (https://openrouter.ai/keys - sk-or- ile başlamalı)
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || "";
 
 // ============================================
-// 🤖 MODEL KONFİGÜRASYONU (ÇOKLU FALLBACK)
+// 🤖 PROVIDER KONFİGÜRASYONU (ÖNCELİK SIRASI)
 // ============================================
 const PROVIDERS = [
   {
     name: "Groq Llama 3.3",
     type: "groq",
     model: "llama-3.3-70b-versatile",
+    apiKey: GROQ_API_KEY,
     priority: 1
   },
   {
     name: "Gemini 2.0 Flash",
     type: "gemini",
     model: "gemini-2.0-flash-exp",
+    apiKey: GEMINI_API_KEY,
     priority: 2
-  },
-  {
-    name: "OpenRouter Gemini 3 Flash",
-    type: "openrouter",
-    model: "google/gemini-3-flash-preview",
-    priority: 3
   },
   {
     name: "Groq Qwen 2.5",
     type: "groq",
     model: "qwen-2.5-32b",
+    apiKey: GROQ_API_KEY,
+    priority: 3
+  },
+  {
+    name: "OpenRouter Gemini 3 Flash",
+    type: "openrouter",
+    model: "google/gemini-3-flash-preview",
+    apiKey: OPENROUTER_API_KEY,
     priority: 4
   }
 ];
 
+// ============================================
+// 🌐 NATIVE FETCH AI ÇAĞRI FONKSİYONLARI
+// ============================================
+
+const callGroq = async (apiKey, model, messages, systemPrompt) => {
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages
+      ],
+      temperature: 0.7,
+      max_tokens: 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Groq ${response.status}: ${err.substring(0, 100)}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0]?.message?.content || "";
+};
+
+const callGemini = async (apiKey, model, messages, systemPrompt) => {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  
+  const contents = messages.map(m => ({
+    role: m.role === 'user' ? 'user' : 'model',
+    parts: [{ text: m.content }]
+  }));
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: contents,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1024,
+      }
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Gemini ${response.status}: ${err.substring(0, 100)}`);
+  }
+
+  const data = await response.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+};
+
+const callOpenRouter = async (apiKey, model, messages, systemPrompt) => {
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": window.location.origin,
+      "X-Title": "Nova Chatbot",
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...messages
+      ],
+      temperature: 0.7,
+      max_tokens: 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`OpenRouter ${response.status}: ${err.substring(0, 100)}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0]?.message?.content || "";
+};
+
+// ============================================
+// 🔄 ÇOKLU FALLBACK MOTORU
+// ============================================
+const callAIWithFallback = async (messages, systemPrompt) => {
+  const errors = [];
+  const sortedProviders = [...PROVIDERS]
+    .filter(p => p.apiKey && p.apiKey.trim() !== "")
+    .sort((a, b) => a.priority - b.priority);
+
+  if (sortedProviders.length === 0) {
+    throw new Error("Hiçbir API anahtarı yapılandırılmamış!");
+  }
+
+  for (const provider of sortedProviders) {
+    try {
+      console.log(`🔄 [${provider.priority}] ${provider.name} deneniyor...`);
+      
+      let content = "";
+      
+      if (provider.type === 'groq') {
+        content = await callGroq(provider.apiKey, provider.model, messages, systemPrompt);
+      } else if (provider.type === 'gemini') {
+        content = await callGemini(provider.apiKey, provider.model, messages, systemPrompt);
+      } else if (provider.type === 'openrouter') {
+        content = await callOpenRouter(provider.apiKey, provider.model, messages, systemPrompt);
+      }
+      
+      if (content && content.trim().length > 0) {
+        console.log(`✅ ${provider.name} başarılı!`);
+        return { success: true, content, provider: provider.name };
+      } else {
+        throw new Error("Boş yanıt alındı");
+      }
+      
+    } catch (err) {
+      const errorMsg = `${provider.name}: ${err.message}`;
+      console.warn(`❌ ${errorMsg}`);
+      errors.push(errorMsg);
+      continue;
+    }
+  }
+  
+  return {
+    success: false,
+    error: errors.join('\n'),
+    provider: null
+  };
+};
+
+// ============================================
+// 🤖 ANA CHATBOT KOMPONENTI
+// ============================================
 export default function AdvancedChatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -238,111 +369,7 @@ export default function AdvancedChatbot() {
     }
   };
 
-  // ============================================
-  // 🚀 ÇOKLU PROVIDER AI ÇAĞRI SİSTEMİ
-  // ============================================
-  const callAIWithFallback = async (messages, systemPrompt) => {
-    const errors = [];
-    
-    // Provider'ları önceliğe göre sırala
-    const sortedProviders = [...PROVIDERS].sort((a, b) => a.priority - b.priority);
-    
-    for (const provider of sortedProviders) {
-      try {
-        console.log(`🔄 [${provider.priority}] ${provider.name} deneniyor...`);
-        
-        let response;
-        
-        if (provider.type === 'groq') {
-          // GROQ API
-          const groqMessages = [
-            { role: "system", content: systemPrompt },
-            ...messages
-          ];
-          
-          response = await groq.chat.completions.create({
-            model: provider.model,
-            messages: groqMessages,
-            temperature: 0.7,
-            max_tokens: 1024,
-          });
-          
-          return {
-            success: true,
-            content: response.choices[0]?.message?.content || "",
-            provider: provider.name
-          };
-          
-        } else if (provider.type === 'gemini') {
-          // GEMINI API
-          const model = genAI.getGenerativeModel({ 
-            model: provider.model,
-            systemInstruction: systemPrompt
-          });
-          
-          const chatContext = messages.map(m => 
-            `${m.role === 'user' ? '[Müşteri]' : '[Nova]'}: ${m.content}`
-          ).join("\n");
-          
-          const result = await model.generateContent(chatContext);
-          
-          return {
-            success: true,
-            content: result.response.text(),
-            provider: provider.name
-          };
-          
-        } else if (provider.type === 'openrouter') {
-          // OPENROUTER API
-          const openRouterMessages = [
-            { role: "system", content: systemPrompt },
-            ...messages
-          ];
-          
-          response = await openai.chat.completions.create({
-            model: provider.model,
-            messages: openRouterMessages,
-            temperature: 0.7,
-            max_tokens: 1024,
-          });
-          
-          return {
-            success: true,
-            content: response.choices[0]?.message?.content || "",
-            provider: provider.name
-          };
-        }
-        
-      } catch (err) {
-        const errorMsg = `${provider.name}: ${err.message || 'Bilinmeyen hata'}`;
-        console.warn(`❌ ${errorMsg}`);
-        errors.push(errorMsg);
-        continue; // Sonraki provider'a geç
-      }
-    }
-    
-    // Tüm provider'lar başarısız oldu
-    return {
-      success: false,
-      error: errors.join('\n'),
-      provider: null
-    };
-  };
-
-  const handleSendMessage = async (textToProcess) => {
-    const text = typeof textToProcess === 'string' ? textToProcess : inputValue;
-    if (!text || typeof text !== 'string' || !text.trim() || isSubmitting) return;
-
-    const trimmedText = text.trim();
-    lastMessageRef.current = trimmedText;
-    
-    const newMessagesHistory = [...localMessages, { role: 'user', content: trimmedText, created: new Date().toISOString() }];
-    setLocalMessages(newMessagesHistory);
-    setInputValue(''); 
-    setIsSubmitting(true);
-    dismissError();
-
-    const SYSTEM_PROMPT = `Senin adın Nova. Sen Nova Teknoloji'nin Kıdemli İş Geliştirme Asistanısın (İş Kapatıcısın).
+  const SYSTEM_PROMPT = `Senin adın Nova. Sen Nova Teknoloji'nin Kıdemli İş Geliştirme Asistanısın (İş Kapatıcısın).
     Asla bir sohbet robotu gibi pasif durma, kısa, saygılı, prestijli (Tesla markası tonunda) cevaplar ver. 
     Lafı uzatma, sürtünmeyi azalt ve sonuç üret.
     
@@ -364,6 +391,19 @@ export default function AdvancedChatbot() {
     Bu senaryoda da "Toplantı planla" kelimesini quick replies JSON içine zorla ekle.
     `;
 
+  const handleSendMessage = async (textToProcess) => {
+    const text = typeof textToProcess === 'string' ? textToProcess : inputValue;
+    if (!text || typeof text !== 'string' || !text.trim() || isSubmitting) return;
+
+    const trimmedText = text.trim();
+    lastMessageRef.current = trimmedText;
+    
+    const newMessagesHistory = [...localMessages, { role: 'user', content: trimmedText, created: new Date().toISOString() }];
+    setLocalMessages(newMessagesHistory);
+    setInputValue(''); 
+    setIsSubmitting(true);
+    dismissError();
+
     try {
       const messages = newMessagesHistory.slice(-5).map(m => ({
         role: m.role === 'user' ? 'user' : 'assistant',
@@ -373,7 +413,6 @@ export default function AdvancedChatbot() {
       const result = await callAIWithFallback(messages, SYSTEM_PROMPT);
 
       if (result.success) {
-        console.log(`✅ Başarılı: ${result.provider}`);
         setLocalMessages([...newMessagesHistory, { 
           role: 'assistant', 
           content: result.content, 
