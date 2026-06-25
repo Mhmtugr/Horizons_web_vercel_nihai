@@ -16,7 +16,7 @@ const INITIAL_QUESTIONS =[
 
 // --- GUVENLIK KONTROLU VE GÜNCEL GEN 3 MODELLERİ ---
 // Vercel uzerinde environment variable kullanımı (Güvenli)
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyC5FtSklR0kn6h_9A5Slbb148zvihlnz1w"; 
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyBHyN2qM8kwNL7T5jNzQ3XqxYOh-YCwCzY"; 
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 const PRIMARY_MODEL = "gemini-3.1-pro";
